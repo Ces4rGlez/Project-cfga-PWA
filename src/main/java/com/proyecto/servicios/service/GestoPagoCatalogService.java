@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.proyecto.servicios.entity.gestopago.ProductoEntity;
+import com.proyecto.servicios.mapper.ProductoMapper;
 import com.proyecto.servicios.model.gestopago.ProductListResponse;
 import com.proyecto.servicios.repositorys.gestopago.ProductoRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +34,7 @@ public class GestoPagoCatalogService {
     private final ProductoRepository productoRepository;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final ProductoMapper productoMapper;
 
     private static final String REDIS_CATALOG_KEY = "gestopago:catalog";
     private static final long REDIS_TTL_HOURS = 24;
@@ -99,20 +100,8 @@ public class GestoPagoCatalogService {
 
         List<ProductListResponse.ProductDto> dtos = response.getProductos().getProducto();
 
-        // Mapear DTOs a Entidades
-        List<ProductoEntity> entities = dtos.stream().map(dto -> ProductoEntity.builder()
-                .idProducto(dto.getIdProducto())
-                .producto(dto.getProducto())
-                .servicio(dto.getServicio())
-                .idServicio(dto.getIdServicio())
-                .idCatTipoServicio(dto.getIdCatTipoServicio())
-                .tipoFront(dto.getTipoFront())
-                .hasDigitoVerificador(dto.getHasDigitoVerificador())
-                .tipoReferencia(dto.getTipoReferencia())
-                .precio(dto.getPrecio())
-                .showAyuda(dto.getShowAyuda())
-                .legend(dto.getLegend())
-                .build()).collect(Collectors.toList());
+        // Mapear DTOs a Entidades usando MapStruct (generado automáticamente en compilación)
+        List<ProductoEntity> entities = productoMapper.toEntityList(dtos);
 
         // Upsert a PostgreSQL (Guarda nuevos y actualiza existentes por ID)
         log.info("Guardando/Actualizando {} productos en PostgreSQL...", entities.size());
