@@ -8,6 +8,8 @@ import com.proyecto.servicios.service.GestoPagoIntegrationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 
 @Slf4j
 @Service
@@ -17,6 +19,7 @@ public class GestoPagoIntegrationServiceImpl implements GestoPagoIntegrationServ
     private final GestoPagoIntegrationClient client;
 
     @Override
+    @Retryable(value = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
     public ProductListResponse getProductList() {
         log.info("Iniciando peticion a GestoPago: getProductList");
         try {

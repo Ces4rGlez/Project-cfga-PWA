@@ -16,13 +16,14 @@ import java.time.format.DateTimeFormatter;
 
 
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.retry.annotation.EnableRetry;
 
 @SpringBootApplication
 @EnableScheduling
 @EnableCaching
 @EnableFeignClients
+@EnableRetry
 @Slf4j
-
 public class App implements CommandLineRunner {
 
     @Autowired
