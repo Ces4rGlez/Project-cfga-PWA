@@ -14,6 +14,12 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
+import com.proyecto.servicios.exception.onboarding.CurpDuplicadaException;
+import com.proyecto.servicios.exception.onboarding.RfcDuplicadoException;
+import com.proyecto.servicios.exception.onboarding.CorreoDuplicadoException;
+import com.proyecto.servicios.exception.onboarding.RecursoNoEncontradoException;
+import com.proyecto.servicios.exception.onboarding.CredencialesInvalidasException;
+import com.proyecto.servicios.exception.onboarding.UsuarioInactivoException;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -54,6 +60,27 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleIllegalArgumentException(IllegalArgumentException ex, HttpServletRequest request) {
         return buildResponse(6, "Error lógico: " + ex.getMessage(), 
                 request.getRequestURI(), HttpStatus.CONFLICT);
+    }
+
+    // Code 7: Conflictos de datos duplicados (Onboarding)
+    @ExceptionHandler({CurpDuplicadaException.class, RfcDuplicadoException.class, CorreoDuplicadoException.class})
+    public ResponseEntity<ApiResponse<Object>> handleDuplicadosException(RuntimeException ex, HttpServletRequest request) {
+        return buildResponse(7, ex.getMessage(), 
+                request.getRequestURI(), HttpStatus.CONFLICT);
+    }
+
+    // Code 8: Recursos no encontrados (Onboarding)
+    @ExceptionHandler(RecursoNoEncontradoException.class)
+    public ResponseEntity<ApiResponse<Object>> handleRecursoNoEncontradoException(RecursoNoEncontradoException ex, HttpServletRequest request) {
+        return buildResponse(8, ex.getMessage(), 
+                request.getRequestURI(), HttpStatus.NOT_FOUND);
+    }
+
+    // Code 9: Problemas de Autenticación / Acceso (Onboarding)
+    @ExceptionHandler({CredencialesInvalidasException.class, UsuarioInactivoException.class})
+    public ResponseEntity<ApiResponse<Object>> handleAuthException(RuntimeException ex, HttpServletRequest request) {
+        return buildResponse(9, ex.getMessage(), 
+                request.getRequestURI(), HttpStatus.UNAUTHORIZED);
     }
 
     // Code 0: Cualquier otra excepción inesperada (Catch-all)
