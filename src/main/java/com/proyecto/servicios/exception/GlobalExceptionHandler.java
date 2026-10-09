@@ -20,6 +20,8 @@ import com.proyecto.servicios.exception.onboarding.CorreoDuplicadoException;
 import com.proyecto.servicios.exception.onboarding.RecursoNoEncontradoException;
 import com.proyecto.servicios.exception.onboarding.CredencialesInvalidasException;
 import com.proyecto.servicios.exception.onboarding.UsuarioInactivoException;
+import com.proyecto.servicios.exception.onboarding.ContrasenaInvalidaException;
+import com.proyecto.servicios.exception.onboarding.CuentaDesactivadaException;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -63,9 +65,19 @@ public class GlobalExceptionHandler {
     }
 
     // Code 7: Conflictos de datos duplicados (Onboarding)
-    @ExceptionHandler({CurpDuplicadaException.class, RfcDuplicadoException.class, CorreoDuplicadoException.class})
-    public ResponseEntity<ApiResponse<Object>> handleDuplicadosException(RuntimeException ex, HttpServletRequest request) {
-        return buildResponse(7, ex.getMessage(), 
+    @ExceptionHandler({
+        CurpDuplicadaException.class, 
+        RfcDuplicadoException.class, 
+        CorreoDuplicadoException.class,
+        org.springframework.dao.DataIntegrityViolationException.class
+    })
+    public ResponseEntity<ApiResponse<Object>> handleDuplicadosException(Exception ex, HttpServletRequest request) {
+        String mensaje = ex.getMessage();
+        // Si es una excepción de base de datos bajo alta concurrencia, limpiamos el mensaje
+        if (ex instanceof org.springframework.dao.DataIntegrityViolationException) {
+            mensaje = "Conflicto de integridad: Un dato único (como CURP, RFC o Correo) ya existe en el sistema.";
+        }
+        return buildResponse(7, mensaje, 
                 request.getRequestURI(), HttpStatus.CONFLICT);
     }
 
@@ -77,10 +89,17 @@ public class GlobalExceptionHandler {
     }
 
     // Code 9: Problemas de Autenticación / Acceso (Onboarding)
-    @ExceptionHandler({CredencialesInvalidasException.class, UsuarioInactivoException.class})
+    @ExceptionHandler({CredencialesInvalidasException.class, UsuarioInactivoException.class, ContrasenaInvalidaException.class})
     public ResponseEntity<ApiResponse<Object>> handleAuthException(RuntimeException ex, HttpServletRequest request) {
         return buildResponse(9, ex.getMessage(), 
                 request.getRequestURI(), HttpStatus.UNAUTHORIZED);
+    }
+
+    // Code 10: Cuenta desactivada - Usuario intenta operaciones de escritura en modo solo lectura
+    @ExceptionHandler(CuentaDesactivadaException.class)
+    public ResponseEntity<ApiResponse<Object>> handleCuentaDesactivadaException(CuentaDesactivadaException ex, HttpServletRequest request) {
+        return buildResponse(10, ex.getMessage(), 
+                request.getRequestURI(), HttpStatus.FORBIDDEN);
     }
 
     // Code 0: Cualquier otra excepción inesperada (Catch-all)
