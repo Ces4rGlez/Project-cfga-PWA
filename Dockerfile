@@ -13,12 +13,15 @@ COPY src src
 # Compilar el proyecto omitiendo los tests para que el despliegue sea mas rapido
 RUN ./gradlew build -x test
 
+# Eliminar el archivo plain.jar para evitar conflictos en la copia
+RUN rm -f build/libs/*-plain.jar
+
 # Imagen ligera de Java para ejecucion
 FROM eclipse-temurin:17-jre-alpine
 VOLUME /tmp
 
 # Copiar el JAR compilado desde la etapa anterior
-COPY --from=build /workspace/app/build/libs/*-SNAPSHOT.jar app.jar
+COPY --from=build /workspace/app/build/libs/*.jar app.jar
 
 # Variables de entorno por defecto (se sobreescribiran en Render)
 ENV PORT=8081
