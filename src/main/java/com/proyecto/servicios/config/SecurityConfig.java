@@ -32,9 +32,12 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Rutas públicas — registro y login
-                .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
-                .requestMatchers(HttpMethod.POST, "/clientes").permitAll()
+                // Rutas públicas — registro, consulta y administración
+                .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/clientes", "/api/v1/clientes/consulta").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/clientes").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/clientes/consultar", "/api/v1/clientes/buscar", "/api/v1/clientes/busqueda").permitAll()
+                .requestMatchers(HttpMethod.PATCH, "/api/v1/clientes", "/api/v1/clientes/actualizacion").permitAll()
                 // Swagger / OpenAPI
                 .requestMatchers(
                     "/swagger-ui/**",

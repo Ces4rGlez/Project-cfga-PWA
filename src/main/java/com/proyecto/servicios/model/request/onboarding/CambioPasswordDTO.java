@@ -7,6 +7,9 @@ import lombok.Data;
 @Data
 public class CambioPasswordDTO {
 
+    @jakarta.validation.constraints.NotNull(message = "El ID del usuario es obligatorio")
+    private Long idUsuario;
+
     @NotBlank(message = "La contraseña actual es obligatoria")
     private String passwordActual;
 

@@ -37,8 +37,27 @@ public class PersonaController {
         return new ResponseEntity<>(personaService.actualizaPersona(personasRequest), HttpStatus.OK);
     }
     @PutMapping(value = "/personasElimina", produces =MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<GenericResponse> actualizUser(@Valid @RequestBody EliminaPersonaRequest personasRequest){
+    public ResponseEntity<GenericResponse> eliminaUser(@Valid @RequestBody EliminaPersonaRequest personasRequest){
 
         return new ResponseEntity<>(personaService.eliminaPersona(personasRequest), HttpStatus.OK);
+    }
+
+    /**
+     * Endpoint unificado con sistema de banderas booleanas para Actualizar o Eliminar:
+     * - Si actualizar es true: Actualiza los datos de la persona
+     * - Si actualizar es false: Elimina la persona
+     */
+    @PutMapping(value = "/personasOperacion", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<GenericResponse> gestionarPersonaPorBandera(
+            @Valid @RequestBody PersonasRequest personasRequest) {
+
+        boolean actualizar = personasRequest.getActualizar() != null && personasRequest.getActualizar();
+        if (actualizar) {
+            return new ResponseEntity<>(personaService.actualizaPersona(personasRequest), HttpStatus.OK);
+        } else {
+            EliminaPersonaRequest eliminaRequest = new EliminaPersonaRequest();
+            eliminaRequest.setNombre(personasRequest.getNombre());
+            return new ResponseEntity<>(personaService.eliminaPersona(eliminaRequest), HttpStatus.OK);
+        }
     }
 }
