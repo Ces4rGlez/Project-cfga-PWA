@@ -1,55 +1,44 @@
 package com.proyecto.servicios.controller.onboarding;
 
 import com.proyecto.servicios.exception.onboarding.CuentaDesactivadaException;
-import com.proyecto.servicios.model.request.onboarding.ClienteActualizaDTO;
-import com.proyecto.servicios.model.request.onboarding.ClienteRegistroDTO;
+import com.proyecto.servicios.model.request.onboarding.*;
 import com.proyecto.servicios.model.response.ApiResponse;
 import com.proyecto.servicios.model.response.onboarding.ClienteResponseDTO;
 import com.proyecto.servicios.service.onboarding.ClienteService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-import java.util.List;
-
 /**
- * Controlador REST para el módulo de Onboarding de Clientes Personas Físicas.
+ * Controlador REST para la administración de clientes y usuarios.
  *
- * Endpoints:
- *   POST   /clientes                          → Registrar nuevo cliente
- *   GET    /clientes                          → Listar todos los clientes (con filtros opcionales)
- *   GET    /clientes/{id}                     → Consultar cliente por ID
- *   PUT    /clientes/{id}                     → Actualizar datos del cliente
- *   DELETE /clientes/{id}                     → Baja lógica del cliente
- *
- * Query params opcionales en GET /clientes:
- *   curp, rfc, correo, numeroCuenta, activos, fechaDesde, fechaHasta
+ * Cumple con los lineamientos arquitectónicos y restricciones:
+ * - Sin @PathVariable ni @RequestParam.
+ * - Toda entrada de datos se recibe mediante Request DTO con @RequestBody y @Valid.
+ * - Respuestas normalizadas con ApiResponse y Response DTOs (nunca entidades JPA).
+ * - Único endpoint unificado de consulta dinámica que combina múltiples filtros.
+ * - Tratamiento de errores centralizado en @RestControllerAdvice (sin try-catch en controladores).
  */
 @RestController
-@RequestMapping("/clientes")
+@RequestMapping("/api/v1/clientes")
 @RequiredArgsConstructor
 public class ClienteController {
 
     private final ClienteService clienteService;
 
     // ==========================================
-    // POST /clientes — Registro de un nuevo cliente
+    // 1. POST /clientes — Registro de nuevo cliente
     // ==========================================
-
     /**
-     * Registra un nuevo cliente persona física con todos sus datos:
-     * datos personales, contacto, domicilio, información laboral,
-     * credenciales de acceso, cuenta bancaria y saldo inicial.
-     *
-     * @param dto Datos del cliente a registrar (validados con @Valid)
-     * @return ClienteResponseDTO con el cliente creado y su cuenta asignada
+     * Registra un nuevo cliente con todas sus dependencias (usuario, domicilio y cuenta).
+     * Los campos controlados por el servidor (saldo, número de cuenta, fecha de registro)
+     * son asignados internamente y no pueden ser alterados por el cliente.
      */
     @PostMapping
     public ResponseEntity<ApiResponse<ClienteResponseDTO>> registrarCliente(
@@ -59,7 +48,7 @@ public class ClienteController {
         ClienteResponseDTO cliente = clienteService.registrarCliente(dto);
 
         ApiResponse<ClienteResponseDTO> response = ApiResponse.<ClienteResponseDTO>builder()
-                .code(1)
+                .code(201)
                 .message("Cliente registrado exitosamente")
                 .path(request.getRequestURI())
                 .data(cliente)
@@ -69,66 +58,62 @@ public class ClienteController {
     }
 
     // ==========================================
-    // GET /clientes — Consultas con filtros opcionales
+    // 2. GET /clientes — Consulta general de usuarios/clientes sin @RequestParam
     // ==========================================
-
-    /**
-     * Consulta clientes con filtros opcionales por query params.
-     * Si no se envía ningún parámetro, retorna todos los clientes.
-     *
-     * Parámetros opcionales:
-     *   - curp:         Buscar por CURP exacto
-     *   - rfc:          Buscar por RFC exacto
-     *   - correo:       Buscar por correo electrónico exacto
-     *   - numeroCuenta: Buscar por número de cuenta bancaria
-     *   - activos:      Si es true, retorna solo clientes activos
-     *   - fechaDesde / fechaHasta: Rango de fechas de registro (ISO 8601)
-     */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> consultarClientes(
-            @RequestParam(required = false) String curp,
-            @RequestParam(required = false) String rfc,
-            @RequestParam(required = false) String correo,
-            @RequestParam(required = false) String numeroCuenta,
-            @RequestParam(required = false) Boolean activos,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaDesde,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaHasta,
+    public ResponseEntity<ApiResponse<java.util.List<ClienteResponseDTO>>> obtenerTodos(HttpServletRequest request) {
+        java.util.List<ClienteResponseDTO> clientes = clienteService.obtenerTodosLosClientes();
+        ApiResponse<java.util.List<ClienteResponseDTO>> response = ApiResponse.<java.util.List<ClienteResponseDTO>>builder()
+                .code(200)
+                .message("Listado de clientes obtenido exitosamente")
+                .path(request.getRequestURI())
+                .data(clientes)
+                .build();
+        return ResponseEntity.ok(response);
+    }
+
+    // ==========================================
+    // 3. POST /clientes/consulta — Consulta por llave compuesta (nombre + correo)
+    // ==========================================
+    /**
+     * Localiza un usuario/cliente mediante la llave compuesta por nombre y correo electrónico.
+     * No utiliza ID ni @PathVariable ni @RequestParam.
+     */
+    @PostMapping("/consulta")
+    public ResponseEntity<ApiResponse<ClienteResponseDTO>> consultarPorLlaveCompuesta(
+            @Valid @RequestBody ClienteConsultaCompuestaDTO dto,
             HttpServletRequest request) {
 
-        List<ClienteResponseDTO> resultado;
+        ClienteResponseDTO cliente = clienteService.obtenerPorLlaveCompuesta(dto);
+        ApiResponse<ClienteResponseDTO> response = ApiResponse.<ClienteResponseDTO>builder()
+                .code(200)
+                .message("Usuario localizado exitosamente")
+                .path(request.getRequestURI())
+                .data(cliente)
+                .build();
 
-        // Filtrar por CURP
-        if (curp != null && !curp.isBlank()) {
-            resultado = List.of(clienteService.obtenerClientePorCurp(curp));
-        }
-        // Filtrar por RFC
-        else if (rfc != null && !rfc.isBlank()) {
-            resultado = List.of(clienteService.obtenerClientePorRfc(rfc));
-        }
-        // Filtrar por correo electrónico
-        else if (correo != null && !correo.isBlank()) {
-            resultado = List.of(clienteService.obtenerClientePorCorreo(correo));
-        }
-        // Filtrar por número de cuenta
-        else if (numeroCuenta != null && !numeroCuenta.isBlank()) {
-            resultado = List.of(clienteService.obtenerClientePorNumeroCuenta(numeroCuenta));
-        }
-        // Filtrar solo clientes activos
-        else if (Boolean.TRUE.equals(activos)) {
-            resultado = clienteService.obtenerClientesActivos();
-        }
-        // Filtrar por rango de fechas de registro
-        else if (fechaDesde != null && fechaHasta != null) {
-            resultado = clienteService.obtenerClientesPorRangoFechas(fechaDesde, fechaHasta);
-        }
-        // Sin filtros → retornar todos
-        else {
-            resultado = clienteService.obtenerTodosLosClientes();
-        }
+        return ResponseEntity.ok(response);
+    }
 
-        ApiResponse<List<ClienteResponseDTO>> response = ApiResponse.<List<ClienteResponseDTO>>builder()
-                .code(1)
-                .message("Consulta exitosa")
+    // ==========================================
+    // 4. POST /clientes/consultar — Consulta dinámica combinable (Specification)
+    // ==========================================
+    /**
+     * Endpoint unificado de consulta dinámica de clientes.
+     * Permite combinar cualquier conjunto de filtros (ID, CURP, RFC, correo, cuenta, nombre,
+     * apellido, estatus activo/inactivo, rango de fechas) y paginación dentro del Request Body.
+     */
+    @PostMapping("/consultar")
+    public ResponseEntity<ApiResponse<Page<ClienteResponseDTO>>> consultarClientes(
+            @Valid @RequestBody(required = false) ClienteFiltroDTO filtro,
+            HttpServletRequest request) {
+
+        ClienteFiltroDTO filtroEfectivo = (filtro != null) ? filtro : new ClienteFiltroDTO();
+        Page<ClienteResponseDTO> resultado = clienteService.consultarClientes(filtroEfectivo);
+
+        ApiResponse<Page<ClienteResponseDTO>> response = ApiResponse.<Page<ClienteResponseDTO>>builder()
+                .code(200)
+                .message("Consulta de clientes realizada exitosamente")
                 .path(request.getRequestURI())
                 .data(resultado)
                 .build();
@@ -137,25 +122,21 @@ public class ClienteController {
     }
 
     // ==========================================
-    // GET /clientes/{id} — Consultar por ID
+    // 5. POST /clientes/detalle — Consultar detalle de cliente por ID
     // ==========================================
-
     /**
-     * Consulta un cliente específico por su ID.
-     *
-     * @param id ID del cliente
-     * @return ClienteResponseDTO con todos los datos del cliente
+     * Consulta el detalle completo de un cliente a partir de su ID encapsulado en el Request Body.
      */
-    @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<ClienteResponseDTO>> obtenerClientePorId(
-            @PathVariable Long id,
+    @PostMapping("/detalle")
+    public ResponseEntity<ApiResponse<ClienteResponseDTO>> obtenerDetalleCliente(
+            @Valid @RequestBody ClienteIdDTO dto,
             HttpServletRequest request) {
 
-        ClienteResponseDTO cliente = clienteService.obtenerClientePorId(id);
+        ClienteResponseDTO cliente = clienteService.obtenerClientePorId(dto.getIdCliente());
 
         ApiResponse<ClienteResponseDTO> response = ApiResponse.<ClienteResponseDTO>builder()
-                .code(1)
-                .message("Cliente encontrado")
+                .code(200)
+                .message("Cliente encontrado exitosamente")
                 .path(request.getRequestURI())
                 .data(cliente)
                 .build();
@@ -164,77 +145,37 @@ public class ClienteController {
     }
 
     // ==========================================
-    // PUT /clientes/{id} — Actualizar cliente
+    // 6. PATCH /clientes — Sistema de banderas unificado (Actualizar o Eliminar)
     // ==========================================
-
     /**
-     * Actualiza los datos de un cliente existente.
-     * No permite modificar CURP, RFC ni número de cuenta (campos inmutables).
+     * Endpoint unificado mediante sistema de banderas booleanas (PATCH):
+     * - Si actualizar es true (default): Ejecuta actualización con los campos enviados en el DTO.
+     * - Si actualizar es false: Da de baja lógica al cliente (o borrado físico si permanente es true).
      *
-     * @param id  ID del cliente a actualizar
-     * @param dto Datos actualizados (validados con @Valid)
-     * @return ClienteResponseDTO con los datos actualizados
+     * Permite identificar al cliente por idCliente o por llave compuesta (nombre + correo electrónico).
      */
-    @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<ClienteResponseDTO>> actualizarCliente(
-            @PathVariable Long id,
-            @Valid @RequestBody ClienteActualizaDTO dto,
+    @PatchMapping
+    public ResponseEntity<ApiResponse<ClienteResponseDTO>> gestionarCliente(
+            @Valid @RequestBody ClienteGestionDTO dto,
             HttpServletRequest request) {
 
         validarUsuarioActivo();
 
-        ClienteResponseDTO cliente = clienteService.actualizarCliente(id, dto);
+        com.proyecto.servicios.model.response.onboarding.GestionResultadoDTO resultado = clienteService.gestionarCliente(dto);
 
         ApiResponse<ClienteResponseDTO> response = ApiResponse.<ClienteResponseDTO>builder()
-                .code(1)
-                .message("Cliente actualizado exitosamente")
+                .code(200)
+                .message(resultado.getMensaje())
                 .path(request.getRequestURI())
-                .data(cliente)
+                .data(resultado.getCliente())
                 .build();
 
         return ResponseEntity.ok(response);
     }
 
     // ==========================================
-    // DELETE /clientes/{id} — Baja lógica
+    // Validación de Autorización
     // ==========================================
-
-    /**
-     * Realiza la baja lógica de un cliente:
-     * - Desactiva el usuario (activo = false)
-     * - Cambia el estatus de todas sus cuentas a "INACTIVA"
-     * No elimina registros de la base de datos.
-     *
-     * @param id ID del cliente a dar de baja
-     */
-    @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> darDeBajaCliente(
-            @PathVariable Long id,
-            HttpServletRequest request) {
-
-        validarUsuarioActivo();
-
-        clienteService.darDeBajaCliente(id);
-
-        ApiResponse<Void> response = ApiResponse.<Void>builder()
-                .code(1)
-                .message("Cliente dado de baja exitosamente (baja lógica)")
-                .path(request.getRequestURI())
-                .data(null)
-                .build();
-
-        return ResponseEntity.ok(response);
-    }
-
-    // ==========================================
-    // Método privado de autorización
-    // ==========================================
-
-    /**
-     * Verifica que el usuario autenticado tenga una cuenta activa.
-     * Si tiene el rol ROLE_READONLY (cuenta desactivada), lanza una excepción
-     * que devuelve HTTP 403 Forbidden indicando modo solo lectura.
-     */
     private void validarUsuarioActivo() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getAuthorities().stream()

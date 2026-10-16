@@ -7,6 +7,7 @@ import com.proyecto.servicios.entity.onboarding.Usuario;
 import com.proyecto.servicios.exception.onboarding.*;
 import com.proyecto.servicios.mapper.onboarding.ClienteMapper;
 import com.proyecto.servicios.model.request.onboarding.ClienteActualizaDTO;
+import com.proyecto.servicios.model.request.onboarding.ClienteFiltroDTO;
 import com.proyecto.servicios.model.request.onboarding.ClienteRegistroDTO;
 import com.proyecto.servicios.model.response.onboarding.ClienteResponseDTO;
 import com.proyecto.servicios.repository.onboarding.ClienteRepository;
@@ -25,6 +26,8 @@ import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 
 /**
@@ -77,9 +80,9 @@ public class ClienteServiceImpl implements ClienteService {
         Cliente cliente = Cliente.builder()
                 .usuario(usuario)
                 .nombre(dto.getNombre())
-                .segundoNombre(dto.getSegundoNombre())
+                .segundoNombre(limpiarTextoOpcional(dto.getSegundoNombre()))
                 .apellidoPaterno(dto.getApellidoPaterno())
-                .apellidoMaterno(dto.getApellidoMaterno())
+                .apellidoMaterno(limpiarTextoOpcional(dto.getApellidoMaterno()))
                 .fechaNacimiento(dto.getFechaNacimiento())
                 .curp(dto.getCurp())
                 .rfc(dto.getRfc())
@@ -87,7 +90,7 @@ public class ClienteServiceImpl implements ClienteService {
                 .nacionalidad(dto.getNacionalidad())
                 .estadoCivil(dto.getEstadoCivil())
                 .telefonoMovil(dto.getTelefonoMovil())
-                .telefonoAlternativo(dto.getTelefonoAlternativo())
+                .telefonoAlternativo(limpiarTextoOpcional(dto.getTelefonoAlternativo()))
                 .ocupacion(dto.getOcupacion())
                 .empresa(dto.getEmpresa())
                 .ingresoMensual(dto.getIngresoMensual())
@@ -97,7 +100,7 @@ public class ClienteServiceImpl implements ClienteService {
         Domicilio domicilio = Domicilio.builder()
                 .calle(dto.getCalle())
                 .numeroExterior(dto.getNumeroExterior())
-                .numeroInterior(dto.getNumeroInterior())
+                .numeroInterior(limpiarTextoOpcional(dto.getNumeroInterior()))
                 .colonia(dto.getColonia())
                 .municipio(dto.getMunicipio())
                 .estado(dto.getEstado())
@@ -128,6 +131,59 @@ public class ClienteServiceImpl implements ClienteService {
         // En un ataque masivo de JMeter con miles de registros, cargar todos tiraría el servidor.
         List<Cliente> clientes = clienteRepository.findAll(PageRequest.of(0, 100)).getContent();
         return clienteMapper.toResponseDTOList(clientes);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ClienteResponseDTO> buscarClientes(Pageable pageable) {
+        return clienteRepository.findAll(pageable).map(clienteMapper::toResponseDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ClienteResponseDTO> buscarClientes(String filtro, Pageable pageable) {
+        if (filtro == null || filtro.isBlank()) {
+            return buscarClientes(pageable);
+        }
+        return clienteRepository.buscarPorFiltro(filtro.trim(), pageable).map(clienteMapper::toResponseDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ClienteResponseDTO> buscarClientes(ClienteFiltroDTO filtro, Pageable pageable) {
+        if (filtro == null) {
+            return buscarClientes(pageable);
+        }
+        if (filtro.getFiltro() != null && !filtro.getFiltro().isBlank()) {
+            return buscarClientes(filtro.getFiltro(), pageable);
+        }
+        if (filtro.getNombre() != null && !filtro.getNombre().isBlank()) {
+            return clienteRepository.findByNombreContainingIgnoreCase(filtro.getNombre().trim(), pageable)
+                    .map(clienteMapper::toResponseDTO);
+        }
+        if (filtro.getCurp() != null && !filtro.getCurp().isBlank()) {
+            return clienteRepository.findByCurpContainingIgnoreCase(filtro.getCurp().trim(), pageable)
+                    .map(clienteMapper::toResponseDTO);
+        }
+        if (filtro.getRfc() != null && !filtro.getRfc().isBlank()) {
+            return clienteRepository.findByRfcContainingIgnoreCase(filtro.getRfc().trim(), pageable)
+                    .map(clienteMapper::toResponseDTO);
+        }
+        return buscarClientes(pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ClienteResponseDTO> consultarClientes(ClienteFiltroDTO filtro) {
+        Pageable pageable = (filtro != null) ? filtro.toPageable() : PageRequest.of(0, 10);
+        var spec = com.proyecto.servicios.repository.onboarding.ClienteSpecification.conFiltros(filtro);
+        return clienteRepository.findAll(spec, pageable).map(clienteMapper::toResponseDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ClienteResponseDTO> buscarClientes(ClienteFiltroDTO filtro) {
+        return consultarClientes(filtro);
     }
 
     @Override
@@ -227,35 +283,213 @@ public class ClienteServiceImpl implements ClienteService {
         cliente.setEmpresa(dto.getEmpresa());
         cliente.setIngresoMensual(dto.getIngresoMensual());
 
+        // Sistema de banderitas: actualizar estatus si se envía la bandera booleana activo
+        if (dto.getActivo() != null) {
+            boolean activo = dto.getActivo();
+            cliente.getUsuario().setActivo(activo);
+            if (cliente.getCuentas() != null) {
+                String estatusCuenta = activo ? "ACTIVA" : "INACTIVA";
+                cliente.getCuentas().forEach(c -> c.setEstatus(estatusCuenta));
+            }
+            log.info("Estatus del cliente ID {} actualizado con bandera activo={}", id, activo);
+        }
+
         Cliente clienteActualizado = clienteRepository.save(cliente);
         log.info("Cliente con ID: {} actualizado exitosamente", id);
 
         return clienteMapper.toResponseDTO(clienteActualizado);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ClienteResponseDTO obtenerPorLlaveCompuesta(com.proyecto.servicios.model.request.onboarding.ClienteConsultaCompuestaDTO dto) {
+        if (dto == null || dto.getNombre() == null || dto.getCorreo() == null) {
+            throw new IllegalArgumentException("El nombre y el correo electrónico son obligatorios");
+        }
+        Cliente cliente = clienteRepository.findByNombreAndCorreo(dto.getNombre().trim(), dto.getCorreo().trim())
+                .orElseThrow(() -> new UsuarioNoEncontradoException(
+                        "No existe un usuario con el nombre y correo electrónico proporcionados."));
+        return clienteMapper.toResponseDTO(cliente);
+    }
+
+    private Cliente localizarClientePorGestionDTO(com.proyecto.servicios.model.request.onboarding.ClienteGestionDTO dto) {
+        if (dto == null) {
+            throw new IllegalArgumentException("El cuerpo de la solicitud no puede ser nulo");
+        }
+        if (dto.getIdCliente() != null) {
+            return clienteRepository.findById(dto.getIdCliente())
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
+                            "No se encontró el cliente con ID: " + dto.getIdCliente()));
+        }
+        if (dto.getNombre() != null && !dto.getNombre().isBlank() &&
+            dto.getCorreoElectronico() != null && !dto.getCorreoElectronico().isBlank()) {
+            return clienteRepository.findByNombreAndCorreo(dto.getNombre().trim(), dto.getCorreoElectronico().trim())
+                    .orElseThrow(() -> new UsuarioNoEncontradoException(
+                            "No existe un usuario con el nombre y correo electrónico proporcionados."));
+        }
+        throw new IllegalArgumentException("Debe proporcionar el idCliente o la llave compuesta (nombre y correo electrónico) para la operación");
+    }
+
+    @Override
+    @Transactional
+    public com.proyecto.servicios.model.response.onboarding.GestionResultadoDTO gestionarCliente(
+            com.proyecto.servicios.model.request.onboarding.ClienteGestionDTO dto) {
+
+        Cliente cliente = localizarClientePorGestionDTO(dto);
+
+        boolean actualizar = dto.getActualizar() == null || dto.getActualizar();
+
+        if (actualizar) {
+            ClienteResponseDTO actualizado = actualizarClienteEntidad(cliente, dto);
+            return com.proyecto.servicios.model.response.onboarding.GestionResultadoDTO.builder()
+                    .mensaje("Cliente actualizado exitosamente mediante sistema de banderas")
+                    .cliente(actualizado)
+                    .build();
+        } else {
+            boolean permanente = Boolean.TRUE.equals(dto.getPermanente());
+            eliminarCliente(cliente.getIdCliente(), permanente);
+            String mensaje = permanente
+                    ? "Cliente eliminado permanentemente de la base de datos mediante bandera booleana"
+                    : "Cliente dado de baja exitosamente (baja lógica) mediante bandera booleana";
+            return com.proyecto.servicios.model.response.onboarding.GestionResultadoDTO.builder()
+                    .mensaje(mensaje)
+                    .cliente(null)
+                    .build();
+        }
+    }
+
+    @Override
+    @Transactional
+    public ClienteResponseDTO actualizarCliente(com.proyecto.servicios.model.request.onboarding.ClienteGestionDTO dto) {
+        Cliente cliente = localizarClientePorGestionDTO(dto);
+        return actualizarClienteEntidad(cliente, dto);
+    }
+
+    private ClienteResponseDTO actualizarClienteEntidad(Cliente cliente, com.proyecto.servicios.model.request.onboarding.ClienteGestionDTO dto) {
+        Long id = cliente.getIdCliente();
+
+        // Si el correo cambió, validar que no esté duplicado
+        if (dto.getCorreoElectronico() != null && !dto.getCorreoElectronico().isBlank()) {
+            String correoActual = cliente.getUsuario().getCorreoElectronico();
+            if (!correoActual.equalsIgnoreCase(dto.getCorreoElectronico().trim())) {
+                validarUnicidadCorreo(dto.getCorreoElectronico().trim());
+                cliente.getUsuario().setCorreoElectronico(dto.getCorreoElectronico().trim());
+            }
+        }
+
+        // Actualizar datos personales si vienen informados
+        if (dto.getNombre() != null && !dto.getNombre().isBlank()) cliente.setNombre(dto.getNombre().trim());
+        if (dto.getSegundoNombre() != null) cliente.setSegundoNombre(dto.getSegundoNombre().trim());
+        if (dto.getApellidoPaterno() != null && !dto.getApellidoPaterno().isBlank()) cliente.setApellidoPaterno(dto.getApellidoPaterno().trim());
+        if (dto.getApellidoMaterno() != null) cliente.setApellidoMaterno(dto.getApellidoMaterno().trim());
+        if (dto.getSexo() != null && !dto.getSexo().isBlank()) cliente.setSexo(dto.getSexo().trim());
+        if (dto.getNacionalidad() != null && !dto.getNacionalidad().isBlank()) cliente.setNacionalidad(dto.getNacionalidad().trim());
+        if (dto.getEstadoCivil() != null && !dto.getEstadoCivil().isBlank()) cliente.setEstadoCivil(dto.getEstadoCivil().trim());
+
+        // Actualizar contacto
+        if (dto.getTelefonoMovil() != null && !dto.getTelefonoMovil().isBlank()) cliente.setTelefonoMovil(dto.getTelefonoMovil().trim());
+        if (dto.getTelefonoAlternativo() != null) cliente.setTelefonoAlternativo(dto.getTelefonoAlternativo().trim());
+
+        // Actualizar domicilio
+        Domicilio domicilio = cliente.getDomicilio();
+        if (domicilio != null) {
+            if (dto.getCalle() != null && !dto.getCalle().isBlank()) domicilio.setCalle(dto.getCalle().trim());
+            if (dto.getNumeroExterior() != null && !dto.getNumeroExterior().isBlank()) domicilio.setNumeroExterior(dto.getNumeroExterior().trim());
+            if (dto.getNumeroInterior() != null) domicilio.setNumeroInterior(dto.getNumeroInterior().trim());
+            if (dto.getColonia() != null && !dto.getColonia().isBlank()) domicilio.setColonia(dto.getColonia().trim());
+            if (dto.getMunicipio() != null && !dto.getMunicipio().isBlank()) domicilio.setMunicipio(dto.getMunicipio().trim());
+            if (dto.getEstado() != null && !dto.getEstado().isBlank()) domicilio.setEstado(dto.getEstado().trim());
+            if (dto.getCodigoPostal() != null && !dto.getCodigoPostal().isBlank()) domicilio.setCodigoPostal(dto.getCodigoPostal().trim());
+            if (dto.getPais() != null && !dto.getPais().isBlank()) domicilio.setPais(dto.getPais().trim());
+        }
+
+        // Actualizar laboral
+        if (dto.getOcupacion() != null && !dto.getOcupacion().isBlank()) cliente.setOcupacion(dto.getOcupacion().trim());
+        if (dto.getEmpresa() != null && !dto.getEmpresa().isBlank()) cliente.setEmpresa(dto.getEmpresa().trim());
+        if (dto.getIngresoMensual() != null) cliente.setIngresoMensual(dto.getIngresoMensual());
+
+        // Sistema de banderas: actualizar estatus si viene bandera activo
+        if (dto.getActivo() != null) {
+            boolean activo = dto.getActivo();
+            cliente.getUsuario().setActivo(activo);
+            if (cliente.getCuentas() != null) {
+                String estatusCuenta = activo ? "ACTIVA" : "INACTIVA";
+                cliente.getCuentas().forEach(c -> c.setEstatus(estatusCuenta));
+            }
+        }
+
+        Cliente guardado = clienteRepository.save(cliente);
+        log.info("Cliente con ID: {} actualizado exitosamente vía PATCH", id);
+        return clienteMapper.toResponseDTO(guardado);
+    }
+
+    @Override
+    @Transactional
+    public ClienteResponseDTO actualizarCliente(ClienteActualizaDTO dto) {
+        if (dto == null || dto.getIdCliente() == null) {
+            throw new IllegalArgumentException("Se requiere el ID del cliente para realizar la actualización");
+        }
+        return actualizarCliente(dto.getIdCliente(), dto);
+    }
+
     /**
-     * Baja lógica: desactiva el usuario y cambia todas sus cuentas a INACTIVA.
-     * No elimina ningún registro de la base de datos.
+     * Sistema de banderitas booleanas para activar / desactivar:
+     * - Si activo es true: Reactiva el usuario y pasa sus cuentas a "ACTIVA".
+     * - Si activo es false: Desactiva el usuario y pasa sus cuentas a "INACTIVA" (baja lógica).
      */
     @Override
     @Transactional
-    public void darDeBajaCliente(Long id) {
-        log.info("Realizando baja lógica del cliente con ID: {}", id);
+    public ClienteResponseDTO cambiarEstatusCliente(Long id, boolean activo) {
+        log.info("Cambiando estatus del cliente ID: {} con banderita activo={}", id, activo);
 
         Cliente cliente = clienteRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "No se encontró el cliente con ID: " + id));
 
-        // Desactivar usuario
-        cliente.getUsuario().setActivo(false);
-
-        // Desactivar todas las cuentas del cliente
-        if (cliente.getCuentas() != null) {
-            cliente.getCuentas().forEach(cuenta -> cuenta.setEstatus("INACTIVA"));
+        if (activo) {
+            // Banderita TRUE: Activar cliente y sus cuentas
+            cliente.getUsuario().setActivo(true);
+            if (cliente.getCuentas() != null) {
+                cliente.getCuentas().forEach(cuenta -> cuenta.setEstatus("ACTIVA"));
+            }
+            log.info("Cliente con ID {} ACTIVADO con éxito", id);
+        } else {
+            // Banderita FALSE: Desactivar cliente y sus cuentas (Baja lógica)
+            cliente.getUsuario().setActivo(false);
+            if (cliente.getCuentas() != null) {
+                cliente.getCuentas().forEach(cuenta -> cuenta.setEstatus("INACTIVA"));
+            }
+            log.info("Cliente con ID {} DESACTIVADO (Baja lógica) con éxito", id);
         }
 
-        clienteRepository.save(cliente);
-        log.info("Baja lógica completada para cliente con ID: {}", id);
+        Cliente guardado = clienteRepository.save(cliente);
+        return clienteMapper.toResponseDTO(guardado);
+    }
+
+    /**
+     * Sistema de banderitas booleanas para eliminación:
+     * - Si eliminacionFisica es true: Elimina físicamente de la base de datos (DELETE).
+     * - Si eliminacionFisica es false: Aplica baja lógica (desactivar).
+     */
+    @Override
+    @Transactional
+    public void eliminarCliente(Long id, boolean eliminacionFisica) {
+        Cliente cliente = clienteRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No se encontró el cliente con ID: " + id));
+
+        if (eliminacionFisica) {
+            clienteRepository.delete(cliente);
+            log.info("Cliente con ID {} ELIMINADO FÍSICAMENTE de la base de datos", id);
+        } else {
+            cambiarEstatusCliente(id, false);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void darDeBajaCliente(Long id) {
+        cambiarEstatusCliente(id, false);
     }
 
     @Override
@@ -376,5 +610,12 @@ public class ClienteServiceImpl implements ClienteService {
                     "Incongruencia detectada: El sexo proporcionado ('" + sexo + 
                     "') no corresponde con el marcador de sexo codificado en la CURP ('" + sexoCurp + "').");
         }
+    }
+
+    private String limpiarTextoOpcional(String texto) {
+        if (texto == null || texto.trim().isEmpty()) {
+            return null;
+        }
+        return texto.trim();
     }
 }
