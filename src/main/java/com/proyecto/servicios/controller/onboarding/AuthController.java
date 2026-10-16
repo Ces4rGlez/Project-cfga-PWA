@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
  *   POST /auth/login → Iniciar sesión y obtener token JWT
  */
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthController {
 

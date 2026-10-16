@@ -43,6 +43,6 @@ public class Domicilio {
     @Column(name = "codigo_postal", nullable = false, length = 5)
     private String codigoPostal;
 
-    @Column(name = "pais", nullable = false, length = 50)
+    @Column(name = "pais", nullable = false, length = 3)
     private String pais;
 }

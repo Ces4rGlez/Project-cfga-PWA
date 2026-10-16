@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.proyecto.servicios.entity.gestopago.ProductoEntity;
 import com.proyecto.servicios.model.gestopago.ProductListResponse;
-import com.proyecto.servicios.model.gestopago.Producto;
 import com.proyecto.servicios.repositorys.gestopago.ProductoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +39,9 @@ class GestoPagoCatalogServiceTest {
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private com.proyecto.servicios.mapper.ProductoMapper productoMapper;
 
     @InjectMocks
     private GestoPagoCatalogService catalogService;
@@ -94,15 +96,23 @@ class GestoPagoCatalogServiceTest {
         // Arrange
         ProductListResponse apiResponse = new ProductListResponse();
         ProductListResponse.Productos wrapper = new ProductListResponse.Productos();
-        List<Producto> productosApi = new ArrayList<>();
-        Producto pApi = new Producto();
+        ProductListResponse.ProductDto pApi = new ProductListResponse.ProductDto();
         pApi.setIdProducto(2);
         pApi.setProducto("Paquete Movistar");
+        List<ProductListResponse.ProductDto> productosApi = new ArrayList<>();
         productosApi.add(pApi);
         wrapper.setProducto(productosApi);
         apiResponse.setProductos(wrapper);
 
+        ProductoEntity entitySaved = new ProductoEntity();
+        entitySaved.setIdProducto(2);
+        entitySaved.setProducto("Paquete Movistar");
+        List<ProductoEntity> entities = List.of(entitySaved);
+
         when(integrationService.getProductList()).thenReturn(apiResponse);
+        when(productoMapper.toEntityList(any())).thenReturn(entities);
+        when(productoRepository.saveAll(any())).thenReturn(entities);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
         // Act
         List<ProductoEntity> result = catalogService.syncCatalogFromGestoPago();

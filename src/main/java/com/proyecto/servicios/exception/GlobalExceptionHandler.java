@@ -1,123 +1,238 @@
 package com.proyecto.servicios.exception;
 
+import com.proyecto.servicios.exception.onboarding.*;
 import com.proyecto.servicios.model.response.ApiResponse;
 import feign.FeignException;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
-import java.util.stream.Collectors;
-import com.proyecto.servicios.exception.onboarding.CurpDuplicadaException;
-import com.proyecto.servicios.exception.onboarding.RfcDuplicadoException;
-import com.proyecto.servicios.exception.onboarding.CorreoDuplicadoException;
-import com.proyecto.servicios.exception.onboarding.RecursoNoEncontradoException;
-import com.proyecto.servicios.exception.onboarding.CredencialesInvalidasException;
-import com.proyecto.servicios.exception.onboarding.UsuarioInactivoException;
-import com.proyecto.servicios.exception.onboarding.ContrasenaInvalidaException;
-import com.proyecto.servicios.exception.onboarding.CuentaDesactivadaException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-@ControllerAdvice
+/**
+ * Manejador centralizado de excepciones con @RestControllerAdvice.
+ * Garantiza una estructura uniforme (ApiResponse) y evita duplicar try-catch en controladores.
+ */
+@RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
-    // Code 2: Error al comunicarse con API Externa (GestoPago, etc)
-    @ExceptionHandler(FeignException.class)
-    public ResponseEntity<ApiResponse<Object>> handleFeignException(FeignException ex, HttpServletRequest request) {
-        return buildResponse(2, "Error de comunicación con servicio externo: " + ex.getMessage(), 
-                request.getRequestURI(), HttpStatus.valueOf(ex.status() != 0 ? ex.status() : 503));
-    }
-
-    // Code 3: Error de validación de datos (cuando falla un @Valid en un RequestBody)
+    // ==========================================
+    // 1. Validaciones de DTOs (@Valid / Bean Validation)
+    // ==========================================
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Object>> handleValidationException(MethodArgumentNotValidException ex, HttpServletRequest request) {
-        String errores = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .collect(Collectors.joining(", "));
-        return buildResponse(3, "Error de validación de datos: " + errores, 
-                request.getRequestURI(), HttpStatus.BAD_REQUEST);
-    }
+    public ResponseEntity<ApiResponse<Object>> handleValidationException(
+            MethodArgumentNotValidException ex, HttpServletRequest request) {
 
-    // Code 4: Petición malformada o JSON ilegible
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
-        return buildResponse(4, "La petición no tiene un formato válido (JSON malformado)", 
-                request.getRequestURI(), HttpStatus.BAD_REQUEST);
-    }
-
-    // Code 5: Ruta no encontrada o Método HTTP incorrecto (Ej. mandar POST a un GET)
-    @ExceptionHandler({NoResourceFoundException.class, HttpRequestMethodNotSupportedException.class})
-    public ResponseEntity<ApiResponse<Object>> handleNotFoundOrMethodNotSupported(Exception ex, HttpServletRequest request) {
-        return buildResponse(5, "Ruta o método no soportado: " + ex.getMessage(), 
-                request.getRequestURI(), HttpStatus.NOT_FOUND);
-    }
-
-    // Code 6: Errores de lógica de negocio (Argumentos inválidos proporcionados por el código)
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<Object>> handleIllegalArgumentException(IllegalArgumentException ex, HttpServletRequest request) {
-        return buildResponse(6, "Error lógico: " + ex.getMessage(), 
-                request.getRequestURI(), HttpStatus.CONFLICT);
-    }
-
-    // Code 7: Conflictos de datos duplicados (Onboarding)
-    @ExceptionHandler({
-        CurpDuplicadaException.class, 
-        RfcDuplicadoException.class, 
-        CorreoDuplicadoException.class,
-        org.springframework.dao.DataIntegrityViolationException.class
-    })
-    public ResponseEntity<ApiResponse<Object>> handleDuplicadosException(Exception ex, HttpServletRequest request) {
-        String mensaje = ex.getMessage();
-        // Si es una excepción de base de datos bajo alta concurrencia, limpiamos el mensaje
-        if (ex instanceof org.springframework.dao.DataIntegrityViolationException) {
-            mensaje = "Conflicto de integridad: Un dato único (como CURP, RFC o Correo) ya existe en el sistema.";
+        Map<String, String> errores = new LinkedHashMap<>();
+        for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
+            errores.put(fieldError.getField(), fieldError.getDefaultMessage());
         }
-        return buildResponse(7, mensaje, 
-                request.getRequestURI(), HttpStatus.CONFLICT);
+
+        log.warn("Error de validación en [{}]: {}", request.getRequestURI(), errores);
+
+        return buildResponse(400, "DATOS_INVALIDOS", "Error de validación en los campos de la solicitud",
+                request.getRequestURI(), HttpStatus.BAD_REQUEST, errores, errores);
     }
 
-    // Code 8: Recursos no encontrados (Onboarding)
+    // ==========================================
+    // 2. Formato de Petición Malformado (JSON ilegible)
+    // ==========================================
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+
+        log.warn("Petición malformada en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        return buildResponse(400, "El cuerpo de la solicitud no tiene un formato JSON válido o contiene datos ilegibles",
+                request.getRequestURI(), HttpStatus.BAD_REQUEST, null);
+    }
+
+    // ==========================================
+    // 3. Reglas de Negocio / Argumentos Inválidos
+    // ==========================================
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Object>> handleIllegalArgumentException(
+            IllegalArgumentException ex, HttpServletRequest request) {
+
+        log.warn("Regla de negocio no cumplida en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        return buildResponse(400, ex.getMessage(),
+                request.getRequestURI(), HttpStatus.BAD_REQUEST, null);
+    }
+
+    // ==========================================
+    // 4. Recursos No Encontrados (404)
+    // ==========================================
+    @ExceptionHandler(UsuarioNoEncontradoException.class)
+    public ResponseEntity<ApiResponse<Object>> handleUsuarioNoEncontradoException(
+            UsuarioNoEncontradoException ex, HttpServletRequest request) {
+
+        log.warn("Usuario no encontrado en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        return buildResponse(404, "USUARIO_NO_ENCONTRADO", ex.getMessage(),
+                request.getRequestURI(), HttpStatus.NOT_FOUND, null, null);
+    }
+
     @ExceptionHandler(RecursoNoEncontradoException.class)
-    public ResponseEntity<ApiResponse<Object>> handleRecursoNoEncontradoException(RecursoNoEncontradoException ex, HttpServletRequest request) {
-        return buildResponse(8, ex.getMessage(), 
-                request.getRequestURI(), HttpStatus.NOT_FOUND);
+    public ResponseEntity<ApiResponse<Object>> handleRecursoNoEncontradoException(
+            RecursoNoEncontradoException ex, HttpServletRequest request) {
+
+        log.warn("Recurso no encontrado en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        return buildResponse(404, ex.getMessage(),
+                request.getRequestURI(), HttpStatus.NOT_FOUND, null);
     }
 
-    // Code 9: Problemas de Autenticación / Acceso (Onboarding)
-    @ExceptionHandler({CredencialesInvalidasException.class, UsuarioInactivoException.class, ContrasenaInvalidaException.class})
-    public ResponseEntity<ApiResponse<Object>> handleAuthException(RuntimeException ex, HttpServletRequest request) {
-        return buildResponse(9, ex.getMessage(), 
-                request.getRequestURI(), HttpStatus.UNAUTHORIZED);
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Object>> handleNoResourceFound(
+            NoResourceFoundException ex, HttpServletRequest request) {
+
+        return buildResponse(404, "La ruta solicitada no fue encontrada en el servidor",
+                request.getRequestURI(), HttpStatus.NOT_FOUND, null);
     }
 
-    // Code 10: Cuenta desactivada - Usuario intenta operaciones de escritura en modo solo lectura
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+
+        return buildResponse(405, "El método HTTP " + ex.getMethod() + " no está soportado para este endpoint",
+                request.getRequestURI(), HttpStatus.METHOD_NOT_ALLOWED, null);
+    }
+
+    // ==========================================
+    // 5. Conflictos de Duplicados e Integridad (409)
+    // ==========================================
+    @ExceptionHandler({
+            CurpDuplicadaException.class,
+            RfcDuplicadoException.class,
+            CorreoDuplicadoException.class
+    })
+    public ResponseEntity<ApiResponse<Object>> handleDuplicadosException(
+            RuntimeException ex, HttpServletRequest request) {
+
+        String codigo = (ex instanceof CorreoDuplicadoException) ? "CORREO_DUPLICADO" : "DATO_DUPLICADO";
+        log.warn("Dato duplicado en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        return buildResponse(409, codigo, ex.getMessage(),
+                request.getRequestURI(), HttpStatus.CONFLICT, null, null);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+
+        log.error("Violación de integridad de datos en [{}]: {}", request.getRequestURI(), ex.getMessage());
+
+        String mensaje = "Conflicto de integridad en la base de datos";
+        String causa = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
+
+        if (causa != null) {
+            if (causa.contains("value too long for type")) {
+                mensaje = "Uno de los campos excede la longitud máxima permitida en la base de datos: " + causa;
+            } else if (causa.contains("violates unique constraint") || causa.contains("llave duplicada") || causa.contains("ya existe")) {
+                mensaje = "Un valor único (como CURP, RFC o Correo) ya existe en el sistema";
+            } else if (causa.contains("violates check constraint")) {
+                mensaje = "Uno de los campos no cumple con el formato o valor permitido en la base de datos: " + causa;
+            } else if (causa.contains("violates not-null constraint")) {
+                mensaje = "Un campo obligatorio requerido por la base de datos no fue proporcionado";
+            } else {
+                mensaje = "Error de integridad de datos: " + causa;
+            }
+        }
+
+        return buildResponse(409, mensaje,
+                request.getRequestURI(), HttpStatus.CONFLICT, null);
+    }
+
+    // ==========================================
+    // 6. Autenticación y Autorización (401 / 403)
+    // ==========================================
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    public ResponseEntity<ApiResponse<Object>> handleCredencialesInvalidas(
+            CredencialesInvalidasException ex, HttpServletRequest request) {
+
+        log.warn("Credenciales inválidas en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        return buildResponse(401, ex.getMessage(),
+                request.getRequestURI(), HttpStatus.UNAUTHORIZED, null);
+    }
+
+    @ExceptionHandler(ContrasenaInvalidaException.class)
+    public ResponseEntity<ApiResponse<Object>> handleContrasenaInvalida(
+            ContrasenaInvalidaException ex, HttpServletRequest request) {
+
+        return buildResponse(400, ex.getMessage(),
+                request.getRequestURI(), HttpStatus.BAD_REQUEST, null);
+    }
+
+    @ExceptionHandler(UsuarioInactivoException.class)
+    public ResponseEntity<ApiResponse<Object>> handleUsuarioInactivo(
+            UsuarioInactivoException ex, HttpServletRequest request) {
+
+        return buildResponse(403, ex.getMessage(),
+                request.getRequestURI(), HttpStatus.FORBIDDEN, null);
+    }
+
     @ExceptionHandler(CuentaDesactivadaException.class)
-    public ResponseEntity<ApiResponse<Object>> handleCuentaDesactivadaException(CuentaDesactivadaException ex, HttpServletRequest request) {
-        return buildResponse(10, ex.getMessage(), 
-                request.getRequestURI(), HttpStatus.FORBIDDEN);
+    public ResponseEntity<ApiResponse<Object>> handleCuentaDesactivada(
+            CuentaDesactivadaException ex, HttpServletRequest request) {
+
+        return buildResponse(403, ex.getMessage(),
+                request.getRequestURI(), HttpStatus.FORBIDDEN, null);
     }
 
-    // Code 0: Cualquier otra excepción inesperada (Catch-all)
+    // ==========================================
+    // 7. Servicios Externos (GestoPago)
+    // ==========================================
+    @ExceptionHandler(FeignException.class)
+    public ResponseEntity<ApiResponse<Object>> handleFeignException(
+            FeignException ex, HttpServletRequest request) {
+
+        log.error("Error en llamada a servicio externo Feign en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        int status = ex.status() != 0 ? ex.status() : 503;
+        return buildResponse(status, "Error de comunicación con el servicio externo",
+                request.getRequestURI(), HttpStatus.valueOf(status), null);
+    }
+
+    // ==========================================
+    // 8. Catch-All: Errores Inesperados (500)
+    //    Sin devolver trazas técnicas ni consultas SQL al cliente
+    // ==========================================
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Object>> handleGeneralException(Exception ex, HttpServletRequest request) {
-        return buildResponse(0, "Error interno en el servidor: " + ex.getMessage(), 
-                request.getRequestURI(), HttpStatus.INTERNAL_SERVER_ERROR);
+    public ResponseEntity<ApiResponse<Object>> handleGeneralException(
+            Exception ex, HttpServletRequest request) {
+
+        log.error("Error interno no controlado en [{}]: ", request.getRequestURI(), ex);
+        return buildResponse(500, "Ocurrió un error interno en el servidor. Por favor, comuníquese con el administrador del sistema.",
+                request.getRequestURI(), HttpStatus.INTERNAL_SERVER_ERROR, null);
     }
 
-    // Método utilitario para construir las respuestas de error sin repetir código
-    private ResponseEntity<ApiResponse<Object>> buildResponse(int code, String message, String path, HttpStatus status) {
+    // ==========================================
+    // Métodos Utilitarios de Respuesta Uniforme
+    // ==========================================
+    private ResponseEntity<ApiResponse<Object>> buildResponse(
+            int code, String codigo, String message, String path, HttpStatus status, Object data, Object errores) {
+
         ApiResponse<Object> response = ApiResponse.builder()
                 .code(code)
+                .codigo(codigo)
                 .message(message)
                 .path(path)
                 .timestamp(LocalDateTime.now())
-                .data(null)
+                .data(data)
+                .errores(errores)
                 .build();
         return new ResponseEntity<>(response, status);
+    }
+
+    private ResponseEntity<ApiResponse<Object>> buildResponse(
+            int code, String message, String path, HttpStatus status, Object data) {
+        return buildResponse(code, null, message, path, status, data, null);
     }
 }
