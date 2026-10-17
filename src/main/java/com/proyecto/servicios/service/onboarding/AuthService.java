@@ -29,11 +29,12 @@ public interface AuthService {
     UsuarioResponseDTO obtenerUsuarioPorId(Long id);
 
     /**
-     * Cambia la contraseña de un usuario.
-     * Valida la contraseña actual antes de actualizar.
-     *
-     * @throws RecursoNoEncontradoException si el usuario no existe
-     * @throws CredencialesInvalidasException si la contraseña actual no coincide
+     * Cambia la contraseña de un usuario a partir de los datos encapsulados en el DTO.
+     */
+    void cambiarPassword(CambioPasswordDTO dto);
+
+    /**
+     * Cambia la contraseña de un usuario recibiendo id explícito (sobrecarga).
      */
     void cambiarPassword(Long idUsuario, CambioPasswordDTO dto);
 }

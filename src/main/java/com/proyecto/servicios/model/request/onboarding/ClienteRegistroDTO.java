@@ -43,6 +43,7 @@ public class ClienteRegistroDTO {
     private String sexo;
 
     @NotBlank(message = "La nacionalidad es obligatoria")
+    @Size(min = 2, max = 3, message = "La nacionalidad debe ser el código de país de 2 o 3 caracteres (ejemplo: MEX)")
     private String nacionalidad;
 
     @NotBlank(message = "El estado civil es obligatorio")
@@ -88,6 +89,7 @@ public class ClienteRegistroDTO {
     private String codigoPostal;
 
     @NotBlank(message = "El país es obligatorio")
+    @Size(min = 2, max = 3, message = "El país debe ser el código de 2 o 3 caracteres (ejemplo: MEX)")
     private String pais;
 
     // Laboral

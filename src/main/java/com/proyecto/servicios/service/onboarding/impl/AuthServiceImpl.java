@@ -92,6 +92,15 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public void cambiarPassword(CambioPasswordDTO dto) {
+        if (dto == null || dto.getIdUsuario() == null) {
+            throw new IllegalArgumentException("Se requiere el ID del usuario para cambiar la contraseña");
+        }
+        cambiarPassword(dto.getIdUsuario(), dto);
+    }
+
     /**
      * Cambia la contraseña de un usuario.
      * Valida que la contraseña actual sea correcta antes de actualizar.

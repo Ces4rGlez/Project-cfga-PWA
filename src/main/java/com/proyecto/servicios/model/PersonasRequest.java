@@ -13,5 +13,5 @@ public class PersonasRequest {
     private String nombre;
     private String apellidoP;
     private String apellidoMaterno;
-
+    private Boolean actualizar;
 }

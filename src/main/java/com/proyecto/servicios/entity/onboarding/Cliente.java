@@ -50,7 +50,7 @@ public class Cliente {
     @Column(name = "sexo", nullable = false, length = 20)
     private String sexo;
 
-    @Column(name = "nacionalidad", nullable = false, length = 50)
+    @Column(name = "nacionalidad", nullable = false, length = 3)
     private String nacionalidad;
 
     @Column(name = "estado_civil", nullable = false, length = 50)

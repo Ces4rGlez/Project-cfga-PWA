@@ -2,6 +2,7 @@ package com.proyecto.servicios.controller.onboarding;
 
 import com.proyecto.servicios.exception.onboarding.CuentaDesactivadaException;
 import com.proyecto.servicios.model.request.onboarding.CambioPasswordDTO;
+import com.proyecto.servicios.model.request.onboarding.UsuarioConsultaDTO;
 import com.proyecto.servicios.model.response.ApiResponse;
 import com.proyecto.servicios.model.response.onboarding.UsuarioResponseDTO;
 import com.proyecto.servicios.service.onboarding.AuthService;
@@ -16,39 +17,37 @@ import org.springframework.web.bind.annotation.*;
 /**
  * Controlador REST para la gestión de usuarios del sistema.
  *
- * Endpoints:
- *   GET /usuarios/{id}            → Consultar información del usuario
- *   PUT /usuarios/{id}/password   → Cambiar contraseña del usuario
+ * Cumple con los lineamientos arquitectónicos:
+ * - Sin @PathVariable ni @RequestParam.
+ * - Toda entrada se recibe vía @RequestBody y se valida con @Valid.
+ * - Respuestas estandarizadas con ApiResponse.
+ * - Manejo global de excepciones mediante @RestControllerAdvice.
  */
 @RestController
-@RequestMapping("/usuarios")
+@RequestMapping("/api/v1/usuarios")
 @RequiredArgsConstructor
 public class UsuarioController {
 
     private final AuthService authService;
 
     // ==========================================
-    // GET /usuarios/{id} — Consultar usuario
+    // 1. POST /usuarios/consultar — Consultar usuario
     // ==========================================
-
     /**
-     * Consulta la información de un usuario por su ID.
+     * Consulta la información de un usuario por su ID encapsulado en el Request Body.
      * Retorna datos públicos: id, correo, estado activo y fecha de registro.
      * No incluye la contraseña por seguridad.
-     *
-     * @param id ID del usuario a consultar
-     * @return UsuarioResponseDTO con la información del usuario
      */
-    @GetMapping("/{id}")
+    @PostMapping("/consultar")
     public ResponseEntity<ApiResponse<UsuarioResponseDTO>> obtenerUsuario(
-            @PathVariable Long id,
+            @Valid @RequestBody UsuarioConsultaDTO dto,
             HttpServletRequest request) {
 
-        UsuarioResponseDTO usuario = authService.obtenerUsuarioPorId(id);
+        UsuarioResponseDTO usuario = authService.obtenerUsuarioPorId(dto.getIdUsuario());
 
         ApiResponse<UsuarioResponseDTO> response = ApiResponse.<UsuarioResponseDTO>builder()
-                .code(1)
-                .message("Usuario encontrado")
+                .code(200)
+                .message("Usuario encontrado exitosamente")
                 .path(request.getRequestURI())
                 .data(usuario)
                 .build();
@@ -57,35 +56,23 @@ public class UsuarioController {
     }
 
     // ==========================================
-    // PUT /usuarios/{id}/password — Cambiar contraseña
+    // 2. PUT /usuarios/password — Cambiar contraseña
     // ==========================================
-
     /**
-     * Cambia la contraseña de un usuario.
-     * Requiere enviar la contraseña actual (para verificación) y la nueva contraseña.
-     * La nueva contraseña debe cumplir las políticas de seguridad:
-     * mínimo 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial.
-     *
-     * Posibles errores:
-     *   - 404: Usuario no encontrado
-     *   - 401: Contraseña actual incorrecta
-     *   - 400: La nueva contraseña no cumple las políticas
-     *
-     * @param id  ID del usuario
-     * @param dto Contraseña actual y nueva contraseña (validadas con @Valid)
+     * Cambia la contraseña de un usuario mediante Request Body con validaciones.
+     * El DTO contiene idUsuario, passwordActual y passwordNueva.
      */
-    @PutMapping("/{id}/password")
+    @PutMapping("/password")
     public ResponseEntity<ApiResponse<Void>> cambiarPassword(
-            @PathVariable Long id,
             @Valid @RequestBody CambioPasswordDTO dto,
             HttpServletRequest request) {
 
         validarUsuarioActivo();
 
-        authService.cambiarPassword(id, dto);
+        authService.cambiarPassword(dto);
 
         ApiResponse<Void> response = ApiResponse.<Void>builder()
-                .code(1)
+                .code(200)
                 .message("Contraseña actualizada exitosamente")
                 .path(request.getRequestURI())
                 .data(null)
@@ -96,7 +83,6 @@ public class UsuarioController {
 
     /**
      * Verifica que el usuario autenticado tenga una cuenta activa.
-     * Si tiene el rol ROLE_READONLY (cuenta desactivada), lanza una excepción.
      */
     private void validarUsuarioActivo() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

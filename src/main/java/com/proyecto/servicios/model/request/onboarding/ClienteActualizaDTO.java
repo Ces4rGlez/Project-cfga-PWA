@@ -7,6 +7,9 @@ import java.math.BigDecimal;
 @Data
 public class ClienteActualizaDTO {
 
+    @NotNull(message = "El ID del cliente es obligatorio para la actualización")
+    private Long idCliente;
+
     // --- Datos Personales (modificables) ---
     @NotBlank(message = "El nombre es obligatorio")
     @Pattern(regexp = "^[a-zA-ZáéíóúÁÉÍÓÚñÑ\\s]+$", message = "El nombre solo debe contener letras y espacios")
@@ -83,4 +86,12 @@ public class ClienteActualizaDTO {
     @NotNull(message = "El ingreso mensual es obligatorio")
     @DecimalMin(value = "0.01", inclusive = true, message = "El ingreso mensual debe ser mayor a cero")
     private BigDecimal ingresoMensual;
+
+    /**
+     * Banderita booleana opcional:
+     * - true: Activa el cliente y sus cuentas bancarias
+     * - false: Desactiva el cliente y sus cuentas (baja lógica)
+     * - null: Mantiene el estatus actual sin alterar
+     */
+    private Boolean activo;
 }

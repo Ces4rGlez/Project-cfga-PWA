@@ -11,10 +11,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class OpenApi {
     @Bean
-    public OpenAPI openAPI(){
+    public OpenAPI openAPI() {
         final String securitySchemeName = "bearerAuth";
         return new OpenAPI()
-                .addServersItem(new Server().url("https://api-onboarding-java.onrender.com").description("Produccion (Render)"))
                 .addServersItem(new Server().url("http://localhost:8081").description("Localhost"))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
