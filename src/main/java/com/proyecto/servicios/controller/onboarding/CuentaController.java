@@ -48,4 +48,23 @@ public class CuentaController {
         return ResponseEntity.ok(response);
     }
 
+    // ==========================================
+    // 2. POST /cuentas/saldo — Consultar saldo por número de cuenta
+    // ==========================================
+    @PostMapping("/saldo")
+    public ResponseEntity<ApiResponse<CuentaResponseDTO>> consultarSaldo(
+            @Valid @RequestBody CuentaConsultaDTO dto,
+            HttpServletRequest request) {
+
+        CuentaResponseDTO cuenta = cuentaService.consultarSaldo(dto.getNumeroCuenta());
+
+        ApiResponse<CuentaResponseDTO> response = ApiResponse.<CuentaResponseDTO>builder()
+                .code(200)
+                .message("Saldo consultado exitosamente")
+                .path(request.getRequestURI())
+                .data(cuenta)
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
 }

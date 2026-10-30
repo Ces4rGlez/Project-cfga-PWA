@@ -1,6 +1,7 @@
 package com.proyecto.servicios.service;
 
 import com.proyecto.servicios.client.GestoPagoIntegrationClient;
+import com.proyecto.servicios.exception.GestoPagoIntegrationException;
 import com.proyecto.servicios.model.gestopago.EchoResponse;
 import com.proyecto.servicios.model.gestopago.ProductListResponse;
 import com.proyecto.servicios.model.gestopago.ValidateMeResponse;
@@ -126,15 +127,16 @@ class GestoPagoIntegrationServiceImplTest {
     }
 
     @Test
-    @DisplayName("getProductList - Debe lanzar RuntimeException cuando el cliente falla")
+    @DisplayName("getProductList - Debe lanzar GestoPagoIntegrationException cuando el cliente falla")
     void getProductList_debeLanzarExcepcionCuandoClienteFalla() {
         // Arrange
-        when(client.getProductList()).thenThrow(new RuntimeException("Error de conexión"));
+        when(client.getProductList()).thenThrow(new RuntimeException("Error de conexion"));
 
         // Act & Assert
-        RuntimeException exception = assertThrows(RuntimeException.class,
+        GestoPagoIntegrationException exception = assertThrows(GestoPagoIntegrationException.class,
                 () -> service.getProductList());
-        assertTrue(exception.getMessage().contains("Error en integración con GestoPago"));
+        assertTrue(exception.getMessage().contains("Error al obtener el catálogo"));
+        assertEquals("getProductList", exception.getOperacion());
         verify(client, times(1)).getProductList();
     }
 
@@ -157,15 +159,16 @@ class GestoPagoIntegrationServiceImplTest {
     }
 
     @Test
-    @DisplayName("sendEcho - Debe lanzar RuntimeException cuando el cliente falla")
+    @DisplayName("sendEcho - Debe lanzar GestoPagoIntegrationException cuando el cliente falla")
     void sendEcho_debeLanzarExcepcionCuandoClienteFalla() {
         // Arrange
         when(client.sendEcho()).thenThrow(new RuntimeException("Timeout"));
 
         // Act & Assert
-        RuntimeException exception = assertThrows(RuntimeException.class,
+        GestoPagoIntegrationException exception = assertThrows(GestoPagoIntegrationException.class,
                 () -> service.sendEcho());
-        assertTrue(exception.getMessage().contains("Error en integración con GestoPago"));
+        assertTrue(exception.getMessage().contains("sendEcho"));
+        assertEquals("sendEcho", exception.getOperacion());
         verify(client, times(1)).sendEcho();
     }
 
@@ -192,15 +195,16 @@ class GestoPagoIntegrationServiceImplTest {
     }
 
     @Test
-    @DisplayName("validateMe - Debe lanzar RuntimeException cuando el cliente falla")
+    @DisplayName("validateMe - Debe lanzar GestoPagoIntegrationException cuando el cliente falla")
     void validateMe_debeLanzarExcepcionCuandoClienteFalla() {
         // Arrange
         when(client.validateMe()).thenThrow(new RuntimeException("403 Forbidden"));
 
         // Act & Assert
-        RuntimeException exception = assertThrows(RuntimeException.class,
+        GestoPagoIntegrationException exception = assertThrows(GestoPagoIntegrationException.class,
                 () -> service.validateMe());
-        assertTrue(exception.getMessage().contains("Error en integración con GestoPago"));
+        assertTrue(exception.getMessage().contains("validateMe"));
+        assertEquals("validateMe", exception.getOperacion());
         verify(client, times(1)).validateMe();
     }
 }

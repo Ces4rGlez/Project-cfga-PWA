@@ -66,7 +66,7 @@ class ClienteControllerTest {
         requestDto.setCurp("GOAC950520HMNNRL03");
         requestDto.setRfc("GOAC9505201A0");
         requestDto.setSexo("M");
-        requestDto.setNacionalidad("Mexicana");
+        requestDto.setNacionalidad("MEX");
         requestDto.setEstadoCivil("Soltero");
         requestDto.setCorreoElectronico("carlos.gonzalez@test.com");
         requestDto.setPassword("Temporal@2026");
@@ -77,7 +77,7 @@ class ClienteControllerTest {
         requestDto.setMunicipio("Cuauhtémoc");
         requestDto.setEstado("CDMX");
         requestDto.setCodigoPostal("06600");
-        requestDto.setPais("México");
+        requestDto.setPais("MEX");
         requestDto.setOcupacion("Ingeniero");
         requestDto.setEmpresa("Tech Corp");
         requestDto.setIngresoMensual(new BigDecimal("25000.00"));
@@ -130,7 +130,7 @@ class ClienteControllerTest {
         requestDto.setCurp("GOAC950520HMNNRL03");
         requestDto.setRfc("GOAC9505201A0");
         requestDto.setSexo("M");
-        requestDto.setNacionalidad("Mexicana");
+        requestDto.setNacionalidad("MEX");
         requestDto.setEstadoCivil("Soltero");
         requestDto.setCorreoElectronico("carlos.gonzalez@test.com");
         requestDto.setPassword("Temporal@2026");
@@ -141,7 +141,7 @@ class ClienteControllerTest {
         requestDto.setMunicipio("Cuauhtémoc");
         requestDto.setEstado("CDMX");
         requestDto.setCodigoPostal("06600");
-        requestDto.setPais("México");
+        requestDto.setPais("MEX");
         requestDto.setOcupacion("Ingeniero");
         requestDto.setEmpresa("Tech Corp");
         requestDto.setIngresoMensual(new BigDecimal("25000.00"));
