@@ -1,6 +1,7 @@
 package com.proyecto.servicios.service.Impl;
 
 import com.proyecto.servicios.client.GestoPagoIntegrationClient;
+import com.proyecto.servicios.exception.GestoPagoIntegrationException;
 import com.proyecto.servicios.model.gestopago.EchoResponse;
 import com.proyecto.servicios.model.gestopago.ProductListResponse;
 import com.proyecto.servicios.model.gestopago.ValidateMeResponse;
@@ -28,7 +29,8 @@ public class GestoPagoIntegrationServiceImpl implements GestoPagoIntegrationServ
             return response;
         } catch (Exception e) {
             log.error("Error al obtener la lista de productos de GestoPago: {}", e.getMessage());
-            throw new RuntimeException("Error en integración con GestoPago: " + e.getMessage(), e);
+            throw new GestoPagoIntegrationException("getProductList",
+                    "Error al obtener el catálogo de productos desde GestoPago", e);
         }
     }
 
@@ -41,7 +43,8 @@ public class GestoPagoIntegrationServiceImpl implements GestoPagoIntegrationServ
             return response;
         } catch (Exception e) {
             log.error("Error al enviar Echo a GestoPago: {}", e.getMessage());
-            throw new RuntimeException("Error en integración con GestoPago: " + e.getMessage(), e);
+            throw new GestoPagoIntegrationException("sendEcho",
+                    "Error al verificar conectividad con GestoPago (sendEcho)", e);
         }
     }
 
@@ -54,7 +57,27 @@ public class GestoPagoIntegrationServiceImpl implements GestoPagoIntegrationServ
             return response;
         } catch (Exception e) {
             log.error("Error al validar el comercio en GestoPago: {}", e.getMessage());
-            throw new RuntimeException("Error en integración con GestoPago: " + e.getMessage(), e);
+            throw new GestoPagoIntegrationException("validateMe",
+                    "Error al validar las credenciales del comercio en GestoPago (validateMe)", e);
+        }
+    }
+
+    @Override
+    public com.proyecto.servicios.model.gestopago.GestoPagoSendTxResponse sendTx(String random, String signed) {
+        log.info("Iniciando peticion a GestoPago: sendTx con random={}", random);
+        try {
+            java.util.Map<String, String> form = new java.util.HashMap<>();
+            form.put("random", random);
+            form.put("signed", signed);
+
+            com.proyecto.servicios.model.gestopago.GestoPagoSendTxResponse response = client.sendTx(form);
+            log.info("Peticion a GestoPago finalizada: sendTx. Codigo={}, numAutorizacion={}", 
+                    response != null ? response.getCodigoFinal() : "null",
+                    response != null ? response.getNumAutorizacion() : "null");
+            return response;
+        } catch (Exception e) {
+            log.error("Error al enviar transaccion sendTx a GestoPago: {}", e.getMessage(), e);
+            throw new RuntimeException("Error en integración sendTx con GestoPago: " + e.getMessage(), e);
         }
     }
 }

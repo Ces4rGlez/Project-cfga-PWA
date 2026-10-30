@@ -1,6 +1,7 @@
 package com.proyecto.servicios.exception;
 
 import com.proyecto.servicios.exception.onboarding.*;
+import com.proyecto.servicios.exception.GestoPagoIntegrationException;
 import com.proyecto.servicios.model.response.ApiResponse;
 import feign.FeignException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,26 +41,26 @@ public class GlobalExceptionHandler {
             errores.put(fieldError.getField(), fieldError.getDefaultMessage());
         }
 
-        log.warn("Error de validación en [{}]: {}", request.getRequestURI(), errores);
+        log.warn("Error de validacion en [{}]: {}", request.getRequestURI(), errores);
 
-        return buildResponse(400, "DATOS_INVALIDOS", "Error de validación en los campos de la solicitud",
+        return buildResponse(400, "DATOS_INVALIDOS", "Error de validacion en los campos de la solicitud",
                 request.getRequestURI(), HttpStatus.BAD_REQUEST, errores, errores);
     }
 
     // ==========================================
-    // 2. Formato de Petición Malformado (JSON ilegible)
+    // 2. Formato de Peticion Malformado (JSON ilegible)
     // ==========================================
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, HttpServletRequest request) {
 
-        log.warn("Petición malformada en [{}]: {}", request.getRequestURI(), ex.getMessage());
-        return buildResponse(400, "El cuerpo de la solicitud no tiene un formato JSON válido o contiene datos ilegibles",
+        log.warn("Peticion malformada en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        return buildResponse(400, "El cuerpo de la solicitud no tiene un formato JSON valido o contiene datos ilegibles",
                 request.getRequestURI(), HttpStatus.BAD_REQUEST, null);
     }
 
     // ==========================================
-    // 3. Reglas de Negocio / Argumentos Inválidos
+    // 3. Reglas de Negocio / Argumentos Invalidos
     // ==========================================
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Object>> handleIllegalArgumentException(
@@ -103,7 +104,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleMethodNotSupported(
             HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
 
-        return buildResponse(405, "El método HTTP " + ex.getMethod() + " no está soportado para este endpoint",
+        return buildResponse(405, "El metodo HTTP " + ex.getMethod() + " no esta soportado para este endpoint",
                 request.getRequestURI(), HttpStatus.METHOD_NOT_ALLOWED, null);
     }
 
@@ -128,22 +129,22 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolation(
             DataIntegrityViolationException ex, HttpServletRequest request) {
 
-        log.error("Violación de integridad de datos en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        log.error("Violacion de integridad de datos en [{}]: {}", request.getRequestURI(), ex.getMessage());
 
         String mensaje = "Conflicto de integridad en la base de datos";
         String causa = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
 
         if (causa != null) {
             if (causa.contains("value too long for type")) {
-                mensaje = "Uno de los campos excede la longitud máxima permitida en la base de datos: " + causa;
+                mensaje = "Uno de los campos excede la longitud maxima permitida en la base de datos";
             } else if (causa.contains("violates unique constraint") || causa.contains("llave duplicada") || causa.contains("ya existe")) {
-                mensaje = "Un valor único (como CURP, RFC o Correo) ya existe en el sistema";
+                mensaje = "Un valor unico (como CURP, RFC o Correo) ya existe en el sistema";
             } else if (causa.contains("violates check constraint")) {
-                mensaje = "Uno de los campos no cumple con el formato o valor permitido en la base de datos: " + causa;
+                mensaje = "Uno de los campos no cumple con el formato o valor permitido en la base de datos";
             } else if (causa.contains("violates not-null constraint")) {
                 mensaje = "Un campo obligatorio requerido por la base de datos no fue proporcionado";
             } else {
-                mensaje = "Error de integridad de datos: " + causa;
+                mensaje = "Error de integridad de datos en la base de datos";
             }
         }
 
@@ -152,13 +153,13 @@ public class GlobalExceptionHandler {
     }
 
     // ==========================================
-    // 6. Autenticación y Autorización (401 / 403)
+    // 6. Autenticacion y Autorizacion (401 / 403)
     // ==========================================
     @ExceptionHandler(CredencialesInvalidasException.class)
     public ResponseEntity<ApiResponse<Object>> handleCredencialesInvalidas(
             CredencialesInvalidasException ex, HttpServletRequest request) {
 
-        log.warn("Credenciales inválidas en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        log.warn("Credenciales invalidas en [{}]: {}", request.getRequestURI(), ex.getMessage());
         return buildResponse(401, ex.getMessage(),
                 request.getRequestURI(), HttpStatus.UNAUTHORIZED, null);
     }
@@ -188,33 +189,46 @@ public class GlobalExceptionHandler {
     }
 
     // ==========================================
-    // 7. Servicios Externos (GestoPago)
+    // 7. Servicios Externos — GestoPago (excepcion de dominio propia)
+    //    Retorna HTTP 502 Bad Gateway con mensaje generico, sin detalles tecnicos.
     // ==========================================
+    @ExceptionHandler(GestoPagoIntegrationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleGestoPagoIntegrationException(
+            GestoPagoIntegrationException ex, HttpServletRequest request) {
+
+        log.error("Error de integracion con GestoPago [operacion={}] en [{}]: {}",
+                ex.getOperacion(), request.getRequestURI(), ex.getMessage());
+        return buildResponse(502, "GESTOPAGO_INTEGRATION_ERROR",
+                "Error al comunicarse con el proveedor GestoPago. Por favor, intente de nuevo en unos momentos.",
+                request.getRequestURI(), HttpStatus.BAD_GATEWAY, null, null);
+    }
+
     @ExceptionHandler(FeignException.class)
     public ResponseEntity<ApiResponse<Object>> handleFeignException(
             FeignException ex, HttpServletRequest request) {
 
-        log.error("Error en llamada a servicio externo Feign en [{}]: {}", request.getRequestURI(), ex.getMessage());
+        log.error("Error en llamada Feign a servicio externo en [{}]: {}", request.getRequestURI(), ex.getMessage());
         int status = ex.status() != 0 ? ex.status() : 503;
-        return buildResponse(status, "Error de comunicación con el servicio externo",
-                request.getRequestURI(), HttpStatus.valueOf(status), null);
+        return buildResponse(status, "FEIGN_EXTERNAL_ERROR",
+                "Error de comunicacion con un servicio externo",
+                request.getRequestURI(), HttpStatus.valueOf(status), null, null);
     }
 
     // ==========================================
     // 8. Catch-All: Errores Inesperados (500)
-    //    Sin devolver trazas técnicas ni consultas SQL al cliente
+    //    Sin devolver trazas tecnicas ni consultas SQL al cliente
     // ==========================================
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleGeneralException(
             Exception ex, HttpServletRequest request) {
 
         log.error("Error interno no controlado en [{}]: ", request.getRequestURI(), ex);
-        return buildResponse(500, "Ocurrió un error interno en el servidor. Por favor, comuníquese con el administrador del sistema.",
+        return buildResponse(500, "Ocurrio un error interno en el servidor. Por favor, comuniquese con el administrador del sistema.",
                 request.getRequestURI(), HttpStatus.INTERNAL_SERVER_ERROR, null);
     }
 
     // ==========================================
-    // Métodos Utilitarios de Respuesta Uniforme
+    // Metodos Utilitarios de Respuesta Uniforme
     // ==========================================
     private ResponseEntity<ApiResponse<Object>> buildResponse(
             int code, String codigo, String message, String path, HttpStatus status, Object data, Object errores) {

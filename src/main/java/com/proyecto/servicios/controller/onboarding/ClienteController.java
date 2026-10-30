@@ -154,7 +154,7 @@ public class ClienteController {
      *
      * Permite identificar al cliente por idCliente o por llave compuesta (nombre + correo electrónico).
      */
-    @PatchMapping
+    @PatchMapping({"", "/actualizacion"})
     public ResponseEntity<ApiResponse<ClienteResponseDTO>> gestionarCliente(
             @Valid @RequestBody ClienteGestionDTO dto,
             HttpServletRequest request) {

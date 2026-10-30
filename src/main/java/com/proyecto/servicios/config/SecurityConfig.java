@@ -48,9 +48,14 @@ public class SecurityConfig {
                 ).permitAll()
                 // Actuator
                 .requestMatchers("/actuator/**").permitAll()
-                // Rutas legacy existentes (GestoPago, personas, etc.)
+                // Rutas legacy existentes (personas, etc.)
                 .requestMatchers("/personas/**", "/personasActualiza/**", "/personasElimina/**").permitAll()
-                .requestMatchers("/gestopago/**", "/api/gestopago/**").permitAll()
+                // GestoPago: catálogo y monitoreo son públicos
+                .requestMatchers(HttpMethod.GET, "/api/gestopago/products", "/api/gestopago/sync", "/api/gestopago/echo", "/api/gestopago/validate").permitAll()
+                .requestMatchers("/gestopago/**").permitAll()
+                // GestoPago transaccional: requiere autenticación JWT obligatoria
+                .requestMatchers(HttpMethod.POST, "/api/gestopago/sendTx", "/api/gestopago/otp/solicitar",
+                        "/api/gestopago/recargas", "/api/gestopago/servicios").authenticated()
                 // Todo lo demás requiere autenticación
                 .anyRequest().authenticated()
             )
