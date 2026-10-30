@@ -15,7 +15,6 @@ import org.springframework.cloud.openfeign.support.ResponseEntityDecoder;
 import org.springframework.cloud.openfeign.support.SpringDecoder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.converter.xml.MappingJackson2XmlHttpMessageConverter;
-
 import java.util.Optional;
 
 @Slf4j
@@ -57,6 +56,14 @@ public class GestoPagoFeignConfig {
         MappingJackson2XmlHttpMessageConverter xmlConverter = new MappingJackson2XmlHttpMessageConverter(xmlMapper);
         ObjectFactory<HttpMessageConverters> objectFactory = () -> new HttpMessageConverters(xmlConverter);
         return new ResponseEntityDecoder(new SpringDecoder(objectFactory));
+    }
+
+    /**
+     * Encoder con soporte para form-urlencoded y multipart de Feign.
+     */
+    @Bean
+    public feign.codec.Encoder feignEncoder() {
+        return new feign.form.spring.SpringFormEncoder();
     }
 }
 

@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -41,6 +43,26 @@ public class GestoPagoTokenServiceImpl implements GestoPagoTokenService {
     @Override
     @Scheduled(fixedRateString = "${gestopago.auth.refresh-rate-ms:3600000}", initialDelay = 0)
     public void renovarToken() {
+        // ⚠️ REGLA CRÍTICA GESTOPAGO/PUNTORED: "One token must be taken per day."
+        // Solicitar múltiples tokens en el mismo día invalida los anteriores y provoca que
+        // sendTx responda con Código 55 ("Origen Valido") en TODAS las transacciones.
+        // Al arrancar (initialDelay=0) o en cada ciclo, verificamos primero si el token
+        // ya fue actualizado en las últimas 23 horas antes de solicitar uno nuevo.
+        Optional<GestoPagoToken> tokenExistente = tokenRepository
+                .findByIdDistribuidorAndCodigoDispositivo(idDistribuidor, codigoDispositivo);
+
+        if (tokenExistente.isPresent()) {
+            LocalDateTime ultimaActualizacion = tokenExistente.get().getFechaActualizacion();
+            if (ultimaActualizacion != null) {
+                long horasDesdeRenovacion = Duration.between(ultimaActualizacion, LocalDateTime.now()).toHours();
+                if (horasDesdeRenovacion < 23) {
+                    log.info("Token GestoPago vigente (actualizado hace {} hora(s)). " +
+                             "Omitiendo solicitud para respetar el límite de 1 token/día de PuntoRed.", horasDesdeRenovacion);
+                    return;
+                }
+            }
+        }
+
         log.info("Renovando token GestoPago para distribuidor={}", idDistribuidor);
         try {
             GestoPagoAuthResponse response = gestoPagoAuthClient.authenticate(
@@ -66,7 +88,7 @@ public class GestoPagoTokenServiceImpl implements GestoPagoTokenService {
                     });
 
             tokenRepository.save(tokenEntity);
-            log.info("Token GestoPago renovado correctamente");
+            log.info("Token GestoPago renovado correctamente para distribuidor={}", idDistribuidor);
 
         } catch (Exception e) {
             log.error("Error al renovar token GestoPago: {}", e.getMessage(), e);

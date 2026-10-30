@@ -40,4 +40,10 @@ bin/
 .vscode/
 
 ### Mac OS ###
-.DS_Storesrc/main/resources/application.properties
+.DS_Store
+
+# Archivos de secretos / credenciales — NUNCA versionar
+.env
+*.env
+!.env.example
+src/main/resources/application.properties
